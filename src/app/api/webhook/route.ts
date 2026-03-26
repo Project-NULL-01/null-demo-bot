@@ -22,6 +22,8 @@ export async function POST(req: Request) {
       if (event.type === 'message' && event.message.type === 'text') {
         const replyToken = event.replyToken;
 
+        if (!replyToken) continue;
+
         // 指定のテキストをオウム返し
         await client.replyMessage({
           replyToken: replyToken,
