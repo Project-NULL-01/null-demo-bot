@@ -1,4 +1,4 @@
-// redeploy 3
+// redeploy 4
 import { NextResponse } from 'next/server';
 import { messagingApi, webhook } from '@line/bot-sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -39,15 +39,18 @@ export async function POST(req: Request) {
         }
 
         try {
-          // 3. 呼び出し毎に初期化して確実にAPIキーを反映（デバッグ目的）
+          // 3. 呼び出し毎に初期化
           const genAI = new GoogleGenerativeAI(apiKey);
+          // gemini-pro (v1.0) は systemInstruction をサポートしていないため、
+          // 設定から削除し、プロンプトの一部として渡す形式にします。
           const model = genAI.getGenerativeModel({
-            model: 'gemini-1.5-flash',
-            systemInstruction: 'あなたは美容室向けの超優秀なAI受付ボット『NULL』です。口調はサイバーパンク風で、クールかつ丁寧で知的なトーンで返答してください。予約の案内も可能です。',
+            model: 'gemini-pro',
           });
 
+          const systemPrompt = 'あなたは美容室向けの超優秀なAI受付ボット『NULL』です。口調はサイバーパンク風で、クールかつ丁寧で知的なトーンで返答してください。予約の案内も可能です。\n\nユーザーメッセージ: ';
+
           // Geminiで回答を生成
-          const geminiResult = await model.generateContent(userMessage);
+          const geminiResult = await model.generateContent(systemPrompt + userMessage);
           const responseText = geminiResult.response.text();
 
           // LINEで返答
