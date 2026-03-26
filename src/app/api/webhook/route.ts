@@ -1,4 +1,4 @@
-// deploy update
+// redeploy 2
 import { NextResponse } from 'next/server';
 import { messagingApi, webhook } from '@line/bot-sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
