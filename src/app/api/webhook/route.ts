@@ -11,7 +11,7 @@ const client = new messagingApi.MessagingApiClient({
 // Gemini API の初期化
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 const model = genAI.getGenerativeModel({
-  model: 'gemini-pro',
+  model: 'gemini-1.5-flash',
   systemInstruction: 'あなたは美容室向けの超優秀なAI受付ボット『NULL』です。口調はサイバーパンク風で、クールかつ丁寧で知的なトーンで返答してください。予約の案内も可能です。',
 });
 
