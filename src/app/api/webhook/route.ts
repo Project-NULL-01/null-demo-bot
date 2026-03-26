@@ -34,6 +34,20 @@ export async function POST(req: Request) {
 
         const userMessage = event.message.text;
 
+        // APIキーの読み込みチェック
+        if (!process.env.GEMINI_API_KEY) {
+          await client.replyMessage({
+            replyToken: replyToken,
+            messages: [
+              {
+                type: 'text',
+                text: 'マスター、APIキーがVercelから読み込めていません！',
+              },
+            ],
+          });
+          continue;
+        }
+
         try {
           // Geminiで回答を生成
           const geminiResult = await model.generateContent(userMessage);
@@ -49,15 +63,15 @@ export async function POST(req: Request) {
               },
             ],
           });
-        } catch (error) {
+        } catch (error: any) {
           console.error('Gemini error:', error);
-          // エラー時のフォールバック
+          // エラー詳細をLINEで返信
           await client.replyMessage({
             replyToken: replyToken,
             messages: [
               {
                 type: 'text',
-                text: '申し訳ありません。通信回路に一時的な不具合が発生しました。後ほど再度お試しください。',
+                text: `Gemini Error: ${error.message || 'Unknown error occurred'}`,
               },
             ],
           });
