@@ -30,6 +30,27 @@ export async function POST(req: Request) {
 
         const userMessage = event.message.text;
 
+        // --- 0. マスター専用裏コマンド (Geminiは呼ばない) ---
+        if (userMessage === 'NULL、予約一覧' || userMessage === 'sudo 予約一覧') {
+          const reservations: any[] = await kv.get('reservations_list') || [];
+          
+          let listText = '';
+          if (reservations.length === 0) {
+            listText = 'マスター、現在の予約データは空です。引き続き受付業務を継続します😎';
+          } else {
+            const formattedList = reservations.map((item, index) => 
+              `${index + 1}. 【${item.name}様】\n   日時: ${item.datetime}\n   メニュー: ${item.menu}\n   (受付: ${item.timestamp})`
+            ).join('\n\n');
+            listText = `マスター、お疲れ様です。現在の予約データを出力します。\n\n${formattedList}\n\n以上です。`;
+          }
+
+          await client.replyMessage({
+            replyToken: replyToken,
+            messages: [{ type: 'text', text: listText }],
+          });
+          continue;
+        }
+
         // --- 1. 特定キーワードへの固定応答 (Geminiは呼ばない/履歴にも残さない) ---
         if (userMessage === 'WEB予約') {
           await client.replyMessage({
@@ -111,6 +132,41 @@ export async function POST(req: Request) {
 
           // Vercel KVに保存 (有効期限1時間)
           await kv.set(kvKey, newHistory, { ex: 3600 });
+
+          // --- 予約データの蓄積アルゴリズム ---
+          if (responseText.includes('ご予約を承りました') || responseText.includes('予約が完了しました')) {
+            try {
+              // 構造化データ抽出のためのサブモデル呼出
+              const extractModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+              const extractResult = await extractModel.generateContent(`以下の会話履歴から「名前」「希望日時」「希望メニュー」を抽出し、以下のフォーマットで出力してください。余計な解説は一切禁止します。
+名前: (抽出した名前)
+日時: (抽出した日時)
+メニュー: (抽出したメニュー)
+
+会話履歴JSON:
+${JSON.stringify(newHistory)}`);
+              
+              const extractedText = extractResult.response.text();
+              const nameMatch = extractedText.match(/名前: (.*)/);
+              const dateMatch = extractedText.match(/日時: (.*)/);
+              const menuMatch = extractedText.match(/メニュー: (.*)/);
+
+              if (nameMatch && dateMatch && menuMatch) {
+                const newReservation = {
+                  name: nameMatch[1].trim(),
+                  datetime: dateMatch[1].trim(),
+                  menu: menuMatch[1].trim(),
+                  timestamp: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
+                };
+
+                const currentList: any[] = await kv.get('reservations_list') || [];
+                currentList.push(newReservation);
+                await kv.set('reservations_list', currentList);
+              }
+            } catch (err) {
+              console.error('Reservation extraction failed:', err);
+            }
+          }
 
           // LINEで返答
           await client.replyMessage({
