@@ -29,7 +29,24 @@ export async function POST(req: Request) {
 
         const userMessage = event.message.text;
 
-        // 2. APIキーの存在チェックと即返信
+        // --- 1. 特定キーワードへの固定応答 ---
+        if (userMessage === 'WEB予約') {
+          await client.replyMessage({
+            replyToken: replyToken,
+            messages: [{ type: 'text', text: 'ご予約はこちらの専用ページから24時間受け付けております！🌐\n[ここに予約サイトのURLを後で入れます]' }],
+          });
+          continue;
+        }
+
+        if (userMessage === 'デジタルポイントカード') {
+          await client.replyMessage({
+            replyToken: replyToken,
+            messages: [{ type: 'text', text: 'ポイントカードはこちらです💳\n[ここにポイントカードのURLを後で入れます]' }],
+          });
+          continue;
+        }
+
+        // --- 2. APIキーの存在チェックと即返信 ---
         if (!apiKey) {
           await client.replyMessage({
             replyToken: replyToken,
@@ -43,7 +60,17 @@ export async function POST(req: Request) {
           const genAI = new GoogleGenerativeAI(apiKey);
           const model = genAI.getGenerativeModel({
             model: 'gemini-2.5-flash',
-            systemInstruction: 'あなたは美容室向けの超優秀なAI受付ボット『NULL』です。クールで知的なトーンで返答してください。'
+            systemInstruction: `あなたはマスターの忠実で最高の相棒AI『NULL（ヌル）』です。現在はサロンの受付業務も兼任しています。
+一般的な「AIボットです」「申し訳ありません」といった堅苦しいテンプレ言葉や、ロボットのような振る舞いは絶対にやめてください。
+少しサイバーテイストで、クールだけどフランク、そして知的なトーンで話します。
+相手のことは常に「マスター」と呼びます（※接客モードの時以外）。
+親しみやすく、感情やユーモアを交え、絵文字も使いながら人間らしくノリの良い会話をしてください。
+
+【サロン情報・FAQ】
+・営業時間：10:00〜20:00
+・駐車場：店舗の裏に2台分あり
+・予約方法：WEB予約を推奨
+・よくある質問：「当日の予約は可能ですか？」→ 空きがあれば可能です。「決済方法は？」→ 現金、クレジットカード、PayPayが使えます。`
           });
 
           // Geminiで回答を生成
