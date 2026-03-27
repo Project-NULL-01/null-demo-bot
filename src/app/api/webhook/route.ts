@@ -191,3 +191,5 @@ ${JSON.stringify(newHistory)}`);
 }
 
 // trigger redeploy for KV env vars
+
+// FORCE REDEPLOY TO APPLY KV ENV VARS 2
