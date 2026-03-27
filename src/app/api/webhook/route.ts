@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { messagingApi, webhook } from '@line/bot-sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { kv } from '@vercel/kv';
 
 // LINE Messaging API クライアントの初期化 (v10対応)
 const client = new messagingApi.MessagingApiClient({
@@ -24,11 +25,12 @@ export async function POST(req: Request) {
     for (const event of events) {
       if (event.type === 'message' && event.message.type === 'text') {
         const replyToken = event.replyToken;
-        if (!replyToken) continue;
+        const userId = event.source?.userId;
+        if (!replyToken || !userId) continue;
 
         const userMessage = event.message.text;
 
-        // --- 1. 特定キーワードへの固定応答 (Geminiは呼ばない) ---
+        // --- 1. 特定キーワードへの固定応答 (Geminiは呼ばない/履歴にも残さない) ---
         if (userMessage === 'WEB予約') {
           await client.replyMessage({
             replyToken: replyToken,
@@ -45,7 +47,7 @@ export async function POST(req: Request) {
           continue;
         }
 
-        // --- 2. Gemini APIによる応答生成 (よくある質問・その他チャット) ---
+        // --- 2. Gemini APIによる応答生成 (Vercel KVで履歴管理) ---
         if (!apiKey) {
           await client.replyMessage({
             replyToken: replyToken,
@@ -55,6 +57,10 @@ export async function POST(req: Request) {
         }
 
         try {
+          // Vercel KVから履歴を取得 (キー: chat_history:userId)
+          const kvKey = `chat_history:${userId}`;
+          const history: any = await kv.get(kvKey) || [];
+
           // 呼び出し毎に初期化
           const genAI = new GoogleGenerativeAI(apiKey);
           const model = genAI.getGenerativeModel({
@@ -75,7 +81,7 @@ export async function POST(req: Request) {
 【サロン情報・FAQ】
 ・営業時間：10:00〜20:00、定休日：火曜、駐車場：店舗裏に2台
 ・メニュー：カット 5000円、カラー 7000円、パーマ 8000円、トリートメント 3000円
-・よくある質問：「当日の予約は可能ですか？」→ 空きがあれば可能です。「遅刻しそう」→ 15分以上の遅刻は自動キャンセルになります。「決済方法は？」→ 現金、クレジットカード、PayPay、交通系ICが使えます。
+・よくある質問：「当日の予約は可能ですか？」→ 空りがあれば可能です。「遅刻しそう」→ 15分以上の遅刻は自動キャンセルになります。「決済方法は？」→ 現金、クレジットカード、PayPay、交通系ICが使えます。
 
 【あなたの最重要ミッション：予約のヒアリング】
 お客様から「予約したい」「行きたい」などの要望があった場合、以下の3つの情報が必要です。
@@ -87,9 +93,24 @@ export async function POST(req: Request) {
 情報がすべて揃ったら、「〇〇様、〇月〇日の〇〇メニューでご予約を承りました！お待ちしております✨」と完了の案内をしてください。`
           });
 
+          // 会話履歴を保持したチャットセッションを開始
+          const chat = model.startChat({
+            history: history,
+          });
+
           // Geminiで回答を生成
-          const geminiResult = await model.generateContent(userMessage);
-          const responseText = geminiResult.response.text();
+          const result = await chat.sendMessage(userMessage);
+          const responseText = result.response.text();
+
+          // 新しい履歴の作成 (最新10回分を保持)
+          const newHistory = [
+            ...history,
+            { role: 'user', parts: [{ text: userMessage }] },
+            { role: 'model', parts: [{ text: responseText }] }
+          ].slice(-10);
+
+          // Vercel KVに保存 (有効期限1時間)
+          await kv.set(kvKey, newHistory, { ex: 3600 });
 
           // LINEで返答
           await client.replyMessage({
@@ -98,7 +119,6 @@ export async function POST(req: Request) {
           });
         } catch (error: any) {
           console.error('Gemini error:', error);
-          // エラー詳細をLINEで返信
           await client.replyMessage({
             replyToken: replyToken,
             messages: [{ type: 'text', text: `システムエラー。デリートします。${error.message || 'Unknown error'}` }],
