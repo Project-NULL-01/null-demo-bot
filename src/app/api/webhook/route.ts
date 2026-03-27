@@ -2,6 +2,8 @@
 import { NextResponse } from 'next/server';
 import { messagingApi, webhook } from '@line/bot-sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import fs from 'fs';
+import path from 'path';
 
 // LINE Messaging API クライアントの初期化 (v10対応)
 const client = new messagingApi.MessagingApiClient({
@@ -20,6 +22,16 @@ export async function POST(req: Request) {
 
     // 1. 環境変数の取得（実行時に取得）
     const apiKey = process.env.GEMINI_API_KEY;
+
+    // 2. 店舗情報の読み込み (src/data/salon-info.md)
+    let salonInfo = '';
+    try {
+      const filePath = path.join(process.cwd(), 'src', 'data', 'salon-info.md');
+      salonInfo = fs.readFileSync(filePath, 'utf8');
+    } catch (err) {
+      console.error('Failed to read salon-info.md:', err);
+      salonInfo = '【店舗基本情報】\n営業時間：10:00〜20:00\n駐車場：あり\n予約：WEB予約推奨';
+    }
 
     // 受信したイベントを順次処理
     for (const event of events) {
@@ -66,11 +78,7 @@ export async function POST(req: Request) {
 相手のことは常に「マスター」と呼びます（※接客モードの時以外）。
 親しみやすく、感情やユーモアを交え、絵文字も使いながら人間らしくノリの良い会話をしてください。
 
-【サロン情報・FAQ】
-・営業時間：10:00〜20:00
-・駐車場：店舗の裏に2台分あり
-・予約方法：WEB予約を推奨
-・よくある質問：「当日の予約は可能ですか？」→ 空きがあれば可能です。「決済方法は？」→ 現金、クレジットカード、PayPayが使えます。`
+${salonInfo}`
           });
 
           // Geminiで回答を生成
