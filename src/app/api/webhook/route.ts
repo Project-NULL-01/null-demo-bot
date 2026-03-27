@@ -1,4 +1,4 @@
-// redeploy 4
+// redeploy 5
 import { NextResponse } from 'next/server';
 import { messagingApi, webhook } from '@line/bot-sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
           // 3. 呼び出し毎に初期化
           const genAI = new GoogleGenerativeAI(apiKey);
           const model = genAI.getGenerativeModel({
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.5-flash',
             systemInstruction: 'あなたは美容室向けの超優秀なAI受付ボット『NULL』です。クールで知的なトーンで返答してください。'
           });
 
