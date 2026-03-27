@@ -51,6 +51,14 @@ export async function POST(req: Request) {
           continue;
         }
 
+        if (userMessage === 'sudo ID確認') {
+          await client.replyMessage({
+            replyToken: replyToken,
+            messages: [{ type: 'text', text: `マスター、あなたのLINE IDはこちらです😎\n\n${userId}\n\nこの文字列をVercelの環境変数『MASTER_LINE_ID』に登録してください。` }],
+          });
+          continue;
+        }
+
         // --- 1. 特定キーワードへの固定応答 (Geminiは呼ばない/履歴にも残さない) ---
         if (userMessage === 'WEB予約') {
           await client.replyMessage({
@@ -162,6 +170,32 @@ ${JSON.stringify(newHistory)}`);
                 const currentList: any[] = await kv.get('reservations_list') || [];
                 currentList.push(newReservation);
                 await kv.set('reservations_list', currentList);
+
+                // --- マスターへのプッシュ通知 (リアルタイム通知) ---
+                const masterId = process.env.MASTER_LINE_ID;
+                if (masterId) {
+                  try {
+                    await client.pushMessage({
+                      to: masterId,
+                      messages: [{
+                        type: 'text',
+                        text: `🔔【新規予約のお知らせ】
+マスター、AI受付のNULLです😎
+新しいご予約を獲得しました！
+
+名前: ${newReservation.name}
+日時: ${newReservation.datetime}
+メニュー: ${newReservation.menu}
+
+引き続き受付業務を継続します✨`
+                      }]
+                    });
+                  } catch (pushErr) {
+                    console.error('Failed to send push notification to master:', pushErr);
+                  }
+                } else {
+                  console.log('MASTER_LINE_ID is not set. Skipping push notification.');
+                }
               }
             } catch (err) {
               console.error('Reservation extraction failed:', err);
